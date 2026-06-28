@@ -24,7 +24,7 @@ export default function SignUp() {
         navigate(`/verify-email?email=${encodeURIComponent(values.email)}`, { replace: true });
       },
       onError: (err: unknown) => {
-        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Registration failed";
+        const msg = (err as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage ?? "Registration failed";
         toast.error(msg);
       },
     });

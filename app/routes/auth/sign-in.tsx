@@ -27,7 +27,7 @@ export default function SignIn() {
         navigate("/dashboard", { replace: true });
       },
       onError: (err: unknown) => {
-        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Invalid credentials";
+        const msg = (err as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage ?? "Invalid credentials";
         toast.error(msg);
       },
     });

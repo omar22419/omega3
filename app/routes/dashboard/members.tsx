@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Search, List, LayoutGrid, UserPlus } from "lucide-react";
 import { useWorkspaceContext } from "@/providers/workspace-provider";
@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SkeletonCard } from "@/components/ui/skeleton";
+import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
 import { getInitials, formatDate } from "@/lib/utils";
 import type { Workspace } from "@/types";
 
@@ -19,6 +20,9 @@ export default function Members() {
   const workspaceId = params.get("workspaceId") ?? selectedWorkspaceId ?? undefined;
   const view   = (params.get("view")   ?? "grid") as "list" | "grid";
   const search = params.get("search") ?? "";
+
+  // FIX: Invite dialog state — same pattern as workspace-details.tsx
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const set = (k: string, v: string) =>
     setParams(p => { p.set(k, v); return p; }, { replace: true });
@@ -42,7 +46,13 @@ export default function Members() {
             {workspace ? `${workspace.members.length} members in ${workspace.name}` : "Manage your team members"}
           </p>
         </div>
-        <Button variant="primary" size="md">
+        {/* FIX: onClick now opens the dialog, disabled when no workspace is selected */}
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setInviteOpen(true)}
+          disabled={!workspaceId}
+        >
           <UserPlus size={16} /> Invite Member
         </Button>
       </div>
@@ -140,6 +150,13 @@ export default function Members() {
           </div>
         </Card>
       )}
+
+      {/* FIX: Dialog rendered at the bottom — same pattern as workspace-details.tsx */}
+      <InviteMemberDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        workspaceId={workspaceId ?? ""}
+      />
     </div>
   );
 }

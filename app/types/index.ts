@@ -104,7 +104,12 @@ export interface Attachment {
   _id: string;
 }
 
-export type ResourceType = "Task" | "Project" | "Workspace" | "Comment" | "User";
+export type ResourceType =
+  | "Task"
+  | "Project"
+  | "Workspace"
+  | "Comment"
+  | "User";
 
 export type ActionType =
   | "created_task"

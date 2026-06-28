@@ -1,10 +1,15 @@
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Link } from "react-router";
-import { ArrowLeft, Moon, Sun } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Moon, Sun } from "lucide-react";
 import { profileSchema, changePasswordSchema, type ProfileFormData, type ChangePasswordFormData } from "@/lib/schemas";
-import { useUpdateUserProfileMutation, useChangePasswordMutation } from "@/hooks/mutations/use-user-mutations";
+import {
+  useUpdateUserProfileMutation,
+  useChangePasswordMutation,
+  useUploadAvatarMutation,
+} from "@/hooks/mutations/use-user-mutations";
 import { useUserProfileQuery } from "@/hooks/queries";
 import { useAuth } from "@/providers/auth-provider";
 import { useTheme } from "@/providers/theme-provider";
@@ -18,6 +23,9 @@ import { getInitials } from "@/lib/utils";
 const LABEL = "text-[11px] uppercase tracking-wide text-[var(--text-secondary)] font-medium";
 const SECTION_TITLE = "text-[13px] font-semibold text-[var(--text-primary)] mb-4 pb-3 border-b border-[var(--border-color)]";
 
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — matches backend limit
+
 export default function Profile() {
   const { user, updateUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -26,10 +34,21 @@ export default function Profile() {
 
   const { mutate: updateProfile, isPending: isUpdating } = useUpdateUserProfileMutation();
   const { mutate: changePassword, isPending: isChangingPwd } = useChangePasswordMutation();
+  const { mutate: uploadAvatar, isPending: isUploadingAvatar } = useUploadAvatarMutation();
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Revoke any object URL we created, on unmount or when replaced
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
 
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
-    values: { name: profile?.username ?? "", profilePicture: profile?.profilePicture ?? "" },
+    values: { name: profile?.username ?? "" },
   });
 
   const passwordForm = useForm<ChangePasswordFormData>({
@@ -39,10 +58,13 @@ export default function Profile() {
 
   const onProfileSubmit = (values: ProfileFormData) => {
     updateProfile(
-      { name: values.name, profilePicture: values.profilePicture },
+      // Always re-send the current profilePicture — the backend
+      // overwrites the field unconditionally, so omitting it here
+      // would wipe out the user's avatar on every name update.
+      { name: values.name, profilePicture: profile?.profilePicture },
       {
         onSuccess: () => {
-          updateUser({ username: values.name, profilePicture: values.profilePicture });
+          updateUser({ username: values.name });
           toast.success("Profile updated");
         },
         onError: (err: unknown) => {
@@ -64,6 +86,41 @@ export default function Profile() {
       },
     });
   };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error("Only JPEG, PNG, WEBP, or GIF images are allowed");
+      return;
+    }
+    if (file.size > MAX_SIZE_BYTES) {
+      toast.error("Image must be smaller than 5MB");
+      return;
+    }
+
+    // Instant local preview while the upload is in flight
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const localUrl = URL.createObjectURL(file);
+    objectUrlRef.current = localUrl;
+    setPreviewUrl(localUrl);
+
+    uploadAvatar(file, {
+      onSuccess: (res) => {
+        updateUser({ profilePicture: res.data.profilePicture });
+        toast.success("Profile picture updated");
+        setPreviewUrl(null);
+      },
+      onError: (err: unknown) => {
+        setPreviewUrl(null);
+        toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to upload image");
+      },
+    });
+  };
+
+  const avatarSrc = previewUrl ?? profile?.profilePicture;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
@@ -90,21 +147,49 @@ export default function Profile() {
             </div>
           ) : (
             <div className="flex items-center gap-4">
-              <Avatar style={{ width: 64, height: 64 }}>
-                <AvatarImage src={profile?.profilePicture} />
-                <AvatarFallback style={{ fontSize: 20, background: "var(--brand)", color: "#fff" }}>
-                  {profile ? getInitials(profile.username) : "U"}
-                </AvatarFallback>
-              </Avatar>
+              {/* Avatar + upload trigger */}
+              <div className="relative shrink-0">
+                <Avatar style={{ width: 64, height: 64 }}>
+                  <AvatarImage src={avatarSrc} />
+                  <AvatarFallback style={{ fontSize: 20, background: "var(--brand)", color: "#fff" }}>
+                    {profile ? getInitials(profile.username) : "U"}
+                  </AvatarFallback>
+                </Avatar>
+
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                    <Loader2 size={18} className="animate-spin text-white" aria-hidden="true" />
+                  </div>
+                )}
+
+                <label
+                  htmlFor="avatar-upload"
+                  aria-label="Change profile picture"
+                  className="absolute -bottom-1 -right-1 flex items-center justify-center w-6 h-6 rounded-full cursor-pointer transition-transform hover:scale-110"
+                  style={{ background: "var(--brand)", border: "2px solid var(--bg-secondary)" }}
+                >
+                  <Camera size={12} className="text-white" aria-hidden="true" />
+                </label>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept={ALLOWED_TYPES.join(",")}
+                  onChange={handleAvatarChange}
+                  disabled={isUploadingAvatar}
+                  className="sr-only"
+                />
+              </div>
+
               <div>
                 <p className="text-[18px] font-semibold text-[var(--text-primary)] mb-0.5">{profile?.username}</p>
                 <p className="text-[13px] text-[var(--text-secondary)]">{profile?.email}</p>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-1">JPEG, PNG, WEBP or GIF — up to 5MB</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Profile form */}
+        {/* Profile form — name only now */}
         <div className="rounded-[12px] border border-[var(--border-color)] p-6 mb-6" style={{ background: "var(--bg-secondary)" }}>
           <h2 className={SECTION_TITLE}>Profile Information</h2>
           <Form {...profileForm}>
@@ -116,13 +201,6 @@ export default function Profile() {
                   <FormMessage className="text-[11px] text-[var(--priority-high)]" />
                 </FormItem>
               )} />
-              <FormField control={profileForm.control} name="profilePicture" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className={LABEL}>Avatar URL <span className="normal-case text-[var(--text-tertiary)]">(optional)</span></FormLabel>
-                  <FormControl><Input {...field} type="url" placeholder="https://example.com/avatar.jpg" /></FormControl>
-                  <FormMessage className="text-[11px] text-[var(--priority-high)]" />
-                </FormItem>
-              )} />
               <Button type="submit" variant="primary" size="sm" disabled={isUpdating}>
                 {isUpdating ? "Saving…" : "Save Changes"}
               </Button>
@@ -130,7 +208,7 @@ export default function Profile() {
           </Form>
         </div>
 
-        {/* Password form */}
+        {/* Password form — unchanged */}
         <div className="rounded-[12px] border border-[var(--border-color)] p-6 mb-6" style={{ background: "var(--bg-secondary)" }}>
           <h2 className={SECTION_TITLE}>Change Password</h2>
           <Form {...passwordForm}>
@@ -165,7 +243,7 @@ export default function Profile() {
           </Form>
         </div>
 
-        {/* Session */}
+        {/* Session — unchanged */}
         <div className="rounded-[12px] border border-[var(--border-color)] p-6" style={{ background: "var(--bg-secondary)" }}>
           <h2 className={SECTION_TITLE}>Session</h2>
           <Button

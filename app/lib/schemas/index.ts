@@ -82,7 +82,7 @@ export const createTaskSchema = z.object({
 
 export const profileSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  profilePicture: z.string().optional(),
+  // profilePicture: z.string().optional(),
 });
 
 export const changePasswordSchema = z

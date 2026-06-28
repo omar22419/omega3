@@ -18,3 +18,14 @@ export function useChangePasswordMutation() {
     mutationFn: (data: ChangePasswordPayload) => userApi.changePassword(data),
   });
 }
+
+// NEW
+export function useUploadAvatarMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => userApi.uploadAvatar(file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.user.profile() });
+    },
+  });
+}

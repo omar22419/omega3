@@ -68,7 +68,7 @@ export function InviteMemberDialog({ open, onOpenChange, workspaceId }: Props) {
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel className={LABEL}>Email address</FormLabel>
-                  <FormControl><Input {...field} type="email" placeholder="colleague@company.com" autoFocus /></FormControl>
+                  <FormControl><Input {...field} type="email" placeholder="omar@gmail.com" autoFocus /></FormControl>
                   <FormMessage className="text-[11px] text-[var(--priority-high)]" />
                 </FormItem>
               )} />
